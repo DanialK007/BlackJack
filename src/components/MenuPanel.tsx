@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useLocation } from "wouter";
 
 interface MenuPanelProps {
   onNewGame: () => void;
@@ -16,6 +17,7 @@ const RULES = [
 ];
 
 export function MenuPanel({ onNewGame }: MenuPanelProps) {
+  const [, navigate] = useLocation();
   const [open, setOpen] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 0, right: 0 });
@@ -101,6 +103,15 @@ export function MenuPanel({ onNewGame }: MenuPanelProps) {
                 icon="?"
                 onClick={() => setShowRules(true)}
                 testId="menu-rules"
+              />
+              <MenuBtn
+                label="Game Lobby"
+                icon="⌂"
+                onClick={() => {
+                  navigate("/");
+                  setOpen(false);
+                }}
+                testId="menu-lobby"
               />
               <div style={{ borderTop: "1px solid rgba(212,187,130,0.1)" }}>
                 <MenuBtn

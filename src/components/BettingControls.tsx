@@ -189,7 +189,9 @@ export function BettingControls({ game }: BettingControlsProps) {
             padding: isMobile ? "8px 20px" : "8px 24px",
             letterSpacing: "0.02em",
           }}
-          onClick={() => canDeal && dispatch({ type: "DEAL" })}
+          onClick={() => {
+            canDeal && dispatch({ type: "DEAL" });
+          }}
           disabled={!canDeal}
           data-testid="button-deal"
         >

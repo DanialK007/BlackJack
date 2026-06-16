@@ -101,10 +101,17 @@ type Action =
   | { type: "DECLINE_INSURANCE" }
   | { type: "RESTART" }
   | { type: "NEW_ROUND" }
-  | { type: "DEALER_PLAY" };
+  | { type: "DEALER_PLAY" }
+  | { type: "SHUFFLE" };
 
 function gameReducer(state: GameContext, action: Action): GameContext {
   switch (action.type) {
+    case "SHUFFLE":
+      return {
+        ...state,
+        deck: shuffle(createDeck(6)),
+      };
+
     case "RESTART":
       return {
         ...state,
@@ -156,6 +163,7 @@ function gameReducer(state: GameContext, action: Action): GameContext {
       if (newDeck.length < 312 * 0.25) {
         newDeck = createDeck(6);
       }
+      newDeck = shuffle(newDeck);
 
       const playerCard1 = newDeck.pop()!;
       const dealerCard1 = newDeck.pop()!;
@@ -469,6 +477,11 @@ export function useBlackjack() {
       message: "",
     };
   });
+
+  // Shuffle on mount (when entering game route)
+  useEffect(() => {
+    dispatch({ type: "SHUFFLE" });
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("blackjack_balance", state.balance.toString());

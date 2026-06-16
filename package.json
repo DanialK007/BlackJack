@@ -70,5 +70,8 @@
     "vite": "^6.3.5",
     "wouter": "^3.3.5",
     "zod": "^3.25.64"
+  },
+  "dependencies": {
+    "firebase": "^12.14.0"
   }
 }

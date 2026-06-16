@@ -9,6 +9,7 @@ import { BetStack } from "@/components/BetStack";
 import { MenuPanel } from "@/components/MenuPanel";
 import { DeckPile } from "@/components/DeckPile";
 import { DeckProvider } from "@/contexts/DeckContext";
+import { FadeIn } from "@/components/FadeIn";
 
 type TablePhase = "idle" | "collecting" | "shuffling";
 
@@ -131,6 +132,7 @@ function GameTableInner() {
     >
       {/* Table oval ring — hidden on mobile to save vertical space */}
       {!isMobile && (
+        <FadeIn duration={0.35} delay={0.04} fade>
         <div
           className="absolute pointer-events-none"
           style={{
@@ -143,16 +145,23 @@ function GameTableInner() {
             border: "2px solid rgba(212,187,130,0.18)",
           }}
         />
+        </FadeIn>
       )}
 
       {/* Deck shoe */}
-      <DeckPile
-        isShuffling={tablePhase === "shuffling"}
-        isCollecting={tablePhase === "collecting"}
-      />
+      <FadeIn duration={0.35} delay={0.08} fade>
+        <DeckPile
+          isShuffling={tablePhase === "shuffling"}
+          isCollecting={tablePhase === "collecting"}
+        />
+      </FadeIn>
 
       {/* ── Header ─────────────────────────────── */}
-      <div
+      <FadeIn
+        duration={0.35}
+        delay={0.14}
+        fade
+        popup
         className="grid grid-cols-3 z-10"
         style={{ padding: isMobile ? "10px 12px 6px" : "16px 24px 8px" }}
       >
@@ -202,11 +211,15 @@ function GameTableInner() {
         <div className="flex items-center justify-end">
           <MenuPanel onNewGame={handleRestart} />
         </div>
-      </div>
+      </FadeIn>
 
       {/* ── Dealer Zone ────────────────────────── */}
-      <div
-        className="flex-1 flex flex-col items-center justify-center z-10 pb-20 lg:pb-48"
+      <FadeIn
+        duration={0.35}
+        delay={0.2}
+        fade
+        popup
+        className="flex flex-col items-center justify-center z-10 mb-auto mt-10"
         style={{ gap: isMobile ? 6 : 12, paddingTop: isMobile ? 4 : 8 }}
       >
         <AnimatePresence>
@@ -234,6 +247,7 @@ function GameTableInner() {
         {dealerHand.length === 0 && gameState === "betting" && !isAnimating && (
           <div
             style={{
+              marginTop: isMobile ? 80 : 200,
               fontSize: isMobile ? "0.65rem" : "0.875rem",
               textTransform: "uppercase",
               letterSpacing: "0.12em",
@@ -243,17 +257,17 @@ function GameTableInner() {
             Place your bet to begin
           </div>
         )}
-      </div>
+      </FadeIn>
 
       {/* ── Bet stack (desktop only — mobile shows bet in controls) ── */}
-      {!isMobile && (
+        <FadeIn duration={0.35} delay={0.26} fade popup>
         <div
           className="absolute left-1/2 z-10"
-          style={{ top: "50%", transform: "translate(-50%, -50%)" }}
+          style={{ top: "45%", transform: "translate(-50%, -50%)" }}
         >
           {!isAnimating && <BetStack amount={activeBet} />}
         </div>
-      )}
+        </FadeIn>
 
       {/* ── Result overlay ─────────────────────── */}
       {showResult && (
@@ -350,7 +364,11 @@ function GameTableInner() {
       </AnimatePresence>
 
       {/* ── Player Zone ────────────────────────── */}
-      <div
+      <FadeIn
+        duration={0.35}
+        delay={0.32}
+        fade
+        popup
         className={`flex flex-col items-center ${isBroke ? "z-30" : "z-10"}`}
         style={{ gap: isMobile ? 8 : 12, paddingBottom: isMobile ? 36 : 12 }}
       >
@@ -401,7 +419,8 @@ function GameTableInner() {
           !isAnimating && <div style={{ height: isMobile ? 8 : 16 }} />}
 
         {/* Controls panel */}
-        <div className="h-40 flex items-end justify-center">
+        <div className="min-h-28 flex items-end justify-center pb-5">
+          <FadeIn duration={0.35} delay={0.38} fade popup>
           <div
             className="z-10 rounded-2xl"
             style={{
@@ -450,8 +469,9 @@ function GameTableInner() {
               <ActionButtons game={game} />
             )}
           </div>
+          </FadeIn>
         </div>
-      </div>
+      </FadeIn>
     </div>
   );
 }
