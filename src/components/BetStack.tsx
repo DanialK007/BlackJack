@@ -5,7 +5,7 @@ interface BetStackProps {
 }
 
 const CHIP_CONFIG = [
-  { value: 100, color: "#e65100", border: "rgba(255,160,80,0.5)", label: "100" },
+  { value: 100, color: "#e65100", border: "rgba(255,160,80)", label: "100" },
   { value: 50, color: "#4a148c", border: "rgba(200,150,255,0.5)", label: "50" },
   { value: 25, color: "#2e7d32", border: "rgba(100,220,100,0.5)", label: "25" },
   { value: 10, color: "#1565c0", border: "rgba(100,160,255,0.5)", label: "10" },
@@ -35,7 +35,7 @@ export function BetStack({ amount }: BetStackProps) {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.6, y: 10 }}
           transition={{ duration: 0.25 }}
-          className="flex flex-col items-center mt-[50px]"
+          className="flex flex-col items-center"
           data-testid="bet-stack"
         >
           <div style={{ position: "relative", width: 48, height: 16 + chips.length * 5 }}>
@@ -50,12 +50,12 @@ export function BetStack({ amount }: BetStackProps) {
                   bottom: i * 5,
                   left: "50%",
                   transform: "translateX(-50%)",
-                  width: 44,
-                  height: 14,
+                  width: 56,
+                  height: 24,
                   borderRadius: "50%",
                   backgroundColor: chip.color,
-                  border: `2px solid ${chip.border}`,
-                  outline: "2px solid rgba(0,0,0,0.35)",
+                  border: `3px dotted ${chip.border}`,
+                  outline: "1px solid rgba(0,0,0,0.35)",
                   boxShadow: "0 2px 4px rgba(0,0,0,0.4)",
                   display: "flex",
                   alignItems: "center",

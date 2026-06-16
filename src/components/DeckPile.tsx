@@ -1,7 +1,9 @@
 import { motion, AnimatePresence } from "framer-motion";
 import type { CSSProperties } from "react";
+import { useEffect } from "react";
 import { useDeckContext } from "@/contexts/DeckContext";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { playSound } from "@/lib/sounds";
 
 interface DeckPileProps {
   isShuffling: boolean;
@@ -47,6 +49,12 @@ export function DeckPile({ isShuffling, isCollecting }: DeckPileProps) {
 
   const backStyle = makeBackStyle(W, H);
   const innerStyle = makeInnerStyle(W, H);
+
+  useEffect(() => {
+    if (isShuffling) {
+      playSound("/sounds/shuffle.mp3", 1);
+    }
+  }, [isShuffling]);
 
   function CardBack({ idx }: { idx: number }) {
     return (

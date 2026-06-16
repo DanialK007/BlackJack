@@ -2,6 +2,7 @@ import { motion, useAnimationControls } from "framer-motion";
 import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Card as CardType } from "@/hooks/useBlackjack";
 import { useDeckContext } from "@/contexts/DeckContext";
+import { playSound } from "@/lib/sounds";
 
 interface CardProps {
   card: CardType;
@@ -184,6 +185,7 @@ export function PlayingCard({
 
     // Animate to natural position with stagger
     const timer = setTimeout(() => {
+      playSound("/sounds/takeCards.mp3", 0.5);
       controls.start({
         x: 0,
         y: 0,
@@ -244,6 +246,12 @@ export function PlayingCard({
         },
       },
     });
+
+    const soundTimer = setTimeout(() => {
+      playSound("/sounds/takeCards.mp3", 0.5);
+    }, collectIndex * 85);
+
+    return () => clearTimeout(soundTimer);
   }, [card.isHidden, collectIndex, controls, deckRef, isCollecting]);
 
   const w = small ? 52 : 72;

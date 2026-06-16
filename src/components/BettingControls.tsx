@@ -1,5 +1,6 @@
 import { useBlackjack } from "@/hooks/useBlackjack";
 import { useIsMobile } from "@/hooks/useIsMobile";
+import { playSound } from "@/lib/sounds";
 
 interface ChipProps {
   amount: number;
@@ -20,11 +21,16 @@ function Chip({
   disabled,
   size,
 }: ChipProps) {
+  function handleClick() {
+    playSound("/sounds/coin.mp3", 0.25);
+    onPlace(amount);
+  }
+
   return (
     <button
       className="chip"
       data-testid={`chip-${amount}`}
-      onClick={() => onPlace(amount)}
+      onClick={handleClick}
       disabled={disabled}
       style={{
         width: size,
