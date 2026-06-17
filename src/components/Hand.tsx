@@ -13,6 +13,8 @@ interface HandProps {
   small?: boolean;
   isCollecting?: boolean;
   collectBaseIndex?: number;
+  skipCount?: number;
+  showSkippedBadge?: boolean;
 }
 
 function HandTotal({ cards, isDealer }: { cards: CardType[]; isDealer?: boolean }) {
@@ -69,6 +71,8 @@ export function Hand({
   small,
   isCollecting,
   collectBaseIndex = 0,
+  skipCount = 0,
+  showSkippedBadge = false,
 }: HandProps) {
   const statusStyle = status && status !== "bust" ? STATUS_STYLES[status] : null;
 
@@ -116,6 +120,23 @@ export function Hand({
           />
         ))}
       </div>
+
+      {showSkippedBadge && (
+        <div
+          style={{
+            animation: "fadeInOut 2s ease-in-out forwards",
+            fontSize: "0.75rem",
+            fontWeight: 600,
+            color: "hsl(43,74%,70%)",
+            padding: "4px 12px",
+            borderRadius: "12px",
+            background: "rgba(184,134,11,0.3)",
+            border: "1px solid rgba(184,134,11,0.4)",
+          }}
+        >
+          Skipped
+        </div>
+      )}
 
       {!isCollecting && (
       <div className="flex items-center gap-2">

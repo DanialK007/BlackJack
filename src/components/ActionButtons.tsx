@@ -68,11 +68,10 @@ function ActionBtn({ label, onClick, variant = "primary", testId, mobile }: Acti
 
 export function ActionButtons({ game }: ActionButtonsProps) {
   const { state, dispatch } = game;
-  const { gameState, playerHands, currentHandIndex, balance, message } = state;
+  const { gameState, playerHands, currentHandIndex, currentTurn, playerSkipCount, message } = state;
   const isMobile = useIsMobile();
 
   const currentHand = playerHands[currentHandIndex];
-  const isInsurancePrompt = gameState === "playing" && message === "Insurance?";
 
   if (gameState === "gameOver") {
     return (
@@ -88,48 +87,17 @@ export function ActionButtons({ game }: ActionButtonsProps) {
     );
   }
 
-  if (gameState === "dealerDrawing" || gameState === "dealerResolving") {
+  if (gameState === "dealerTurn") {
     return (
       <div style={{ color: "rgba(212,187,130,0.45)", fontSize: isMobile ? "0.75rem" : "0.8rem", letterSpacing: "0.06em" }}>
-        Waiting for dealer...
+        Dealer is thinking...
       </div>
     );
   }
 
-  if (isInsurancePrompt) {
-    return (
-      <div className="flex flex-col items-center gap-2">
-        <p style={{ color: "hsl(43,74%,70%)", fontSize: isMobile ? "0.8rem" : "0.875rem", textAlign: "center" }}>
-          Dealer shows Ace — take insurance?
-        </p>
-        <div className="flex gap-2 flex-wrap justify-center">
-          <ActionBtn
-            label={`Insurance ($${Math.floor(currentHand?.bet / 2 || 0)})`}
-            onClick={() => dispatch({ type: "INSURANCE" })}
-            variant="gold"
-            testId="button-insurance"
-            mobile={isMobile}
-          />
-          <ActionBtn
-            label="No Thanks"
-            onClick={() => dispatch({ type: "DECLINE_INSURANCE" })}
-            variant="danger"
-            testId="button-decline-insurance"
-            mobile={isMobile}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  if (gameState === "playing" && currentHand && !currentHand.isFinished) {
-    const canDouble = currentHand.cards.length === 2 && balance >= currentHand.bet;
-    const canSplit =
-      currentHand.cards.length === 2 &&
-      currentHand.cards[0].rank === currentHand.cards[1].rank &&
-      balance >= currentHand.bet &&
-      playerHands.length === 1;
-
+  if (gameState === "playerTurn" && currentTurn === "player" && currentHand && !currentHand.isFinished) {
+    const skipButtonLabel = playerSkipCount >= 1 ? "Stand" : "Skip";
+    
     return (
       <div
         style={{
@@ -140,14 +108,20 @@ export function ActionButtons({ game }: ActionButtonsProps) {
           width: "100%",
         }}
       >
-        <ActionBtn label="Hit"   onClick={() => dispatch({ type: "HIT" })}   variant="primary" testId="button-hit"    mobile={isMobile} />
-        <ActionBtn label="Stand" onClick={() => dispatch({ type: "STAND" })} variant="danger"  testId="button-stand"  mobile={isMobile} />
-        {canDouble && (
-          <ActionBtn label="Double" onClick={() => dispatch({ type: "DOUBLE_DOWN" })} variant="gold"   testId="button-double" mobile={isMobile} />
-        )}
-        {canSplit && (
-          <ActionBtn label="Split"  onClick={() => dispatch({ type: "SPLIT" })}        variant="purple" testId="button-split"  mobile={isMobile} />
-        )}
+        <ActionBtn 
+          label="Draw" 
+          onClick={() => dispatch({ type: "DRAW" })} 
+          variant="primary" 
+          testId="button-draw" 
+          mobile={isMobile} 
+        />
+        <ActionBtn 
+          label={skipButtonLabel} 
+          onClick={() => skipButtonLabel === "Stand" ? dispatch({ type: "STAND" }) : dispatch({ type: "SKIP" })} 
+          variant="danger" 
+          testId="button-skip" 
+          mobile={isMobile} 
+        />
       </div>
     );
   }

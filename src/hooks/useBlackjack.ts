@@ -19,7 +19,7 @@ export interface Hand {
   status?: "win" | "loss" | "push" | "blackjack" | "bust";
 }
 
-export type GameState = "betting" | "dealing" | "playing" | "dealerDrawing" | "dealerResolving" | "gameOver";
+export type GameState = "betting" | "dealing" | "playerTurn" | "dealerTurn" | "gameOver";
 export type DealingPhase = "p1" | "p2" | "d1" | "d2" | "done";
 
 export interface GameContext {
@@ -32,11 +32,15 @@ export interface GameContext {
   gameState: GameState;
   insuranceBet: number;
   message: string;
-  // For progressive dealing animation
   dealingPhase: DealingPhase;
-  // Ready badges
+  // Turn-based logic
+  currentTurn: "player" | "dealer";
+  playerSkipCount: number;
+  dealerSkipCount: number;
   playerReady: boolean;
   dealerReady: boolean;
+  // Bust detection
+  isBusted: boolean;
 }
 
 const SUITS: Suit[] = ["Spades", "Hearts", "Diamonds", "Clubs"];
@@ -100,17 +104,16 @@ type Action =
   | { type: "CLEAR_BET" }
   | { type: "DEAL" }
   | { type: "DEAL_NEXT_CARD" }
-  | { type: "HIT" }
+  | { type: "DRAW" }
+  | { type: "SKIP" }
   | { type: "STAND" }
-  | { type: "DOUBLE_DOWN" }
-  | { type: "SPLIT" }
   | { type: "INSURANCE" }
   | { type: "DECLINE_INSURANCE" }
   | { type: "RESTART" }
   | { type: "NEW_ROUND" }
-  | { type: "DEALER_RESOLVE" }
-  | { type: "DEALER_DRAW_NEXT" }
-  | { type: "START_DEALER_DRAWING" }
+  | { type: "AUTO_DEALER_DRAW" }
+  | { type: "AUTO_DEALER_SKIP" }
+  | { type: "RESOLVE_GAME" }
   | { type: "SHUFFLE" };
 
 function gameReducer(state: GameContext, action: Action): GameContext {
@@ -135,8 +138,12 @@ function gameReducer(state: GameContext, action: Action): GameContext {
         currentHandIndex: 0,
         deck: createDeck(6),
         dealingPhase: "done",
+        currentTurn: "player",
+        playerSkipCount: 0,
+        dealerSkipCount: 0,
         playerReady: false,
         dealerReady: false,
+        isBusted: false,
       };
 
     case "NEW_ROUND":
@@ -151,8 +158,12 @@ function gameReducer(state: GameContext, action: Action): GameContext {
         currentHandIndex: 0,
         deck: state.deck.length < 78 ? createDeck(6) : state.deck,
         dealingPhase: "done",
+        currentTurn: "player",
+        playerSkipCount: 0,
+        dealerSkipCount: 0,
         playerReady: false,
         dealerReady: false,
+        isBusted: false,
       };
 
     case "PLACE_BET":
@@ -181,7 +192,6 @@ function gameReducer(state: GameContext, action: Action): GameContext {
       }
       newDeck = shuffle(newDeck);
 
-      // Deal player card 1 — the rest is progressive via DEAL_NEXT_CARD
       const playerCard1 = newDeck.pop()!;
 
       return {
@@ -196,372 +206,307 @@ function gameReducer(state: GameContext, action: Action): GameContext {
         dealerHand: [],
         gameState: "dealing",
         dealingPhase: "p1",
+        currentTurn: "player",
+        playerSkipCount: 0,
+        dealerSkipCount: 0,
         playerReady: false,
         dealerReady: false,
+        isBusted: false,
         message: "",
       };
     }
 
     case "DEAL_NEXT_CARD": {
       let newDeck = [...state.deck];
-      const { dealingPhase, playerHands, dealerHand } = state;
-
-      // p1 → deal player card 2 + dealer card 1
-      if (dealingPhase === "p1") {
-        const playerCard2 = newDeck.pop()!;
+      const nextPhase = state.dealingPhase === "p1" ? "p2" : state.dealingPhase === "p2" ? "d1" : state.dealingPhase === "d1" ? "d2" : "done";
+      
+      if (state.dealingPhase === "p1") {
         const dealerCard1 = newDeck.pop()!;
-        const newPlayerHands = playerHands.map(h => ({
-          ...h,
-          cards: [...h.cards, playerCard2],
-        }));
-        return {
-          ...state,
-          deck: newDeck,
-          playerHands: newPlayerHands,
-          dealerHand: [dealerCard1],
-          gameState: "dealing",
-          dealingPhase: "p2",
-        };
+        return { ...state, deck: newDeck, dealerHand: [dealerCard1], dealingPhase: nextPhase };
       }
-
-      // p2 → deal dealer's hidden card
-      if (dealingPhase === "p2") {
-        const dealerCard2 = { ...newDeck.pop()!, isHidden: true };
-        const newDealerHand = [...dealerHand, dealerCard2];
-        const pVal = calculateHandValue(playerHands[0]?.cards ?? []).total;
-        const dealerCard1 = dealerHand[0];
-
-        // Check for dealer Ace (insurance)
-        if (dealerCard1?.rank === "A" && state.balance >= state.currentBet / 2) {
-          return {
-            ...state,
-            deck: newDeck,
-            dealerHand: newDealerHand,
-            gameState: "playing",
-            dealingPhase: "done",
-            message: "Insurance?",
-          };
+      
+      if (state.dealingPhase === "p2") {
+        const playerCard2 = newDeck.pop()!;
+        const hands = [...state.playerHands];
+        if (hands[0]) {
+          hands[0] = { ...hands[0], cards: [...hands[0].cards, playerCard2] };
         }
-
-        // Check for player blackjack (instant)
-        if (pVal === 21) {
-          const newPlayerHands = playerHands.map(h => ({
-            ...h,
-            isFinished: true,
-            status: "blackjack" as const,
-          }));
+        
+        const { total: pTotal } = calculateHandValue(hands[0]?.cards || []);
+        if (pTotal === 21) {
+          hands[0]!.status = "blackjack";
+          hands[0]!.isFinished = true;
           return {
             ...state,
             deck: newDeck,
-            playerHands: newPlayerHands,
-            dealerHand: newDealerHand.map(c => ({ ...c, isHidden: false })),
+            playerHands: hands,
+            dealingPhase: nextPhase,
             gameState: "gameOver",
-            balance: state.balance + state.currentBet * 2.5,
-            currentBet: 0,
+            playerReady: true,
+            dealerReady: true,
             message: "Blackjack! You win!",
-            dealingPhase: "done",
           };
         }
-
+        
+        return { ...state, deck: newDeck, playerHands: hands, dealingPhase: nextPhase };
+      }
+      
+      if (state.dealingPhase === "d1") {
+        const dealerCard2 = newDeck.pop()!;
+        const hiddenCard = { ...dealerCard2, isHidden: true };
+        return { ...state, deck: newDeck, dealerHand: [...state.dealerHand, hiddenCard], dealingPhase: nextPhase };
+      }
+      
+      if (state.dealingPhase === "d2") {
+        // Dealing done, randomly select who goes first
+        const firstTurn = Math.random() < 0.5 ? "player" : "dealer";
         return {
           ...state,
-          deck: newDeck,
-          dealerHand: newDealerHand,
-          gameState: "playing",
+          gameState: "playerTurn",
           dealingPhase: "done",
-          message: "",
+          currentTurn: firstTurn,
+          message: firstTurn === "player" ? "Your turn" : "Dealer's turn",
         };
       }
-
+      
       return state;
     }
 
-    case "HIT": {
-      const newDeck = [...state.deck];
+    case "DRAW": {
+      if (state.currentTurn !== "player" || state.playerReady) return state;
+      
+      let newDeck = [...state.deck];
       const card = newDeck.pop()!;
       const hands = [...state.playerHands];
-      const currentHand = hands[state.currentHandIndex];
+      hands[0]!.cards = [...hands[0]!.cards, card];
       
-      currentHand.cards = [...currentHand.cards, card];
-      const pVal = calculateHandValue(currentHand.cards).total;
+      const { total } = calculateHandValue(hands[0]!.cards);
       
-      if (pVal > 21) {
-        currentHand.isFinished = true;
-        currentHand.status = "bust";
-        
-        if (state.currentHandIndex === hands.length - 1) {
-          // All hands finished
-          return {
-            ...state,
-            deck: newDeck,
-            playerHands: hands,
-            gameState: "gameOver",
-            dealerHand: state.dealerHand.map(c => ({...c, isHidden: false})),
-            currentBet: 0,
-            message: "Bust!",
-          };
-        } else {
-          return {
-            ...state,
-            deck: newDeck,
-            playerHands: hands,
-            currentHandIndex: state.currentHandIndex + 1,
-          };
-        }
+      if (total > 21) {
+        hands[0]!.status = "bust";
+        hands[0]!.isFinished = true;
+        return {
+          ...state,
+          deck: newDeck,
+          playerHands: hands,
+          gameState: "gameOver",
+          isBusted: true,
+          message: "Bust! Game over.",
+        };
       }
-
+      
       return {
         ...state,
         deck: newDeck,
         playerHands: hands,
+        currentTurn: "dealer",
+        gameState: "dealerTurn",
       };
+    }
+
+    case "SKIP": {
+      if (state.currentTurn === "player" && !state.playerReady) {
+        const newSkipCount = state.playerSkipCount + 1;
+        if (newSkipCount >= 2) {
+          return {
+            ...state,
+            playerSkipCount: newSkipCount,
+            playerReady: true,
+            currentTurn: "dealer",
+            gameState: "dealerTurn",
+            message: "You are ready. Dealer's turn.",
+          };
+        }
+        return {
+          ...state,
+          playerSkipCount: newSkipCount,
+          currentTurn: "dealer",
+          gameState: "dealerTurn",
+          message: "Player skipped.",
+        };
+      }
+      
+      if (state.currentTurn === "dealer" && !state.dealerReady) {
+        const newSkipCount = state.dealerSkipCount + 1;
+        if (newSkipCount >= 2) {
+          return {
+            ...state,
+            dealerSkipCount: newSkipCount,
+            dealerReady: true,
+            currentTurn: "player",
+            gameState: "playerTurn",
+            message: "Dealer is ready. Your turn.",
+          };
+        }
+        return {
+          ...state,
+          dealerSkipCount: newSkipCount,
+          currentTurn: "player",
+          gameState: "playerTurn",
+          message: "Dealer skipped.",
+        };
+      }
+      
+      return state;
     }
 
     case "STAND": {
-      const hands = [...state.playerHands];
-      hands[state.currentHandIndex].isFinished = true;
-
-      if (state.currentHandIndex === hands.length - 1) {
-        // Player is done — mark ready, reveal dealer's hole card, start drawing
-        const revealedDealerHand = state.dealerHand.map(c => ({ ...c, isHidden: false }));
+      if (state.currentTurn === "player") {
         return {
           ...state,
-          playerHands: hands,
+          playerSkipCount: 2,
           playerReady: true,
-          dealerHand: revealedDealerHand,
-          gameState: "dealerDrawing",
-        };
-      } else {
-        return {
-          ...state,
-          playerHands: hands,
-          currentHandIndex: state.currentHandIndex + 1,
+          currentTurn: "dealer",
+          gameState: "dealerTurn",
+          message: "You stand. Dealer's turn.",
         };
       }
+      return state;
     }
 
-    case "DOUBLE_DOWN": {
-      const hands = [...state.playerHands];
-      const currentHand = hands[state.currentHandIndex];
+    case "AUTO_DEALER_DRAW": {
+      if (state.currentTurn !== "dealer" || state.dealerReady) return state;
       
-      if (state.balance < currentHand.bet) return state;
-
-      const newDeck = [...state.deck];
+      let newDeck = [...state.deck];
       const card = newDeck.pop()!;
+      const dealerCards = [...state.dealerHand, card];
       
-      currentHand.cards = [...currentHand.cards, card];
-      currentHand.isFinished = true;
+      const { total } = calculateHandValue(dealerCards);
       
-      const newBalance = state.balance - currentHand.bet;
-      currentHand.bet *= 2;
-      
-      const pVal = calculateHandValue(currentHand.cards).total;
-      if (pVal > 21) {
-        currentHand.status = "bust";
-      }
-
-if (state.currentHandIndex === hands.length - 1) {
-        const revealedDealerHand = state.dealerHand.map(c => ({...c, isHidden: false}));
+      if (total > 21) {
         return {
           ...state,
-          balance: newBalance,
           deck: newDeck,
+          dealerHand: dealerCards,
+          gameState: "gameOver",
+          isBusted: true,
+          message: "Dealer bust! You win!",
+        };
+      }
+      
+      if (total >= 17) {
+        return {
+          ...state,
+          deck: newDeck,
+          dealerHand: dealerCards,
+          dealerReady: true,
+          currentTurn: "player",
+          gameState: "playerTurn",
+          message: "Dealer stands. Your turn.",
+        };
+      }
+      
+      return {
+        ...state,
+        deck: newDeck,
+        dealerHand: dealerCards,
+        currentTurn: "player",
+        gameState: "playerTurn",
+      };
+    }
+
+    case "AUTO_DEALER_SKIP": {
+      if (state.currentTurn !== "dealer" || state.dealerReady) return state;
+      
+      const newSkipCount = state.dealerSkipCount + 1;
+      if (newSkipCount >= 2) {
+        return {
+          ...state,
+          dealerSkipCount: newSkipCount,
+          dealerReady: true,
+          currentTurn: "player",
+          gameState: "playerTurn",
+          message: "Dealer stands. Your turn.",
+        };
+      }
+      
+      return {
+        ...state,
+        dealerSkipCount: newSkipCount,
+        currentTurn: "player",
+        gameState: "playerTurn",
+        message: "Dealer passed.",
+      };
+    }
+
+    case "INSURANCE":
+      return {
+        ...state,
+        balance: state.balance - (state.currentBet / 2),
+        insuranceBet: state.currentBet / 2,
+      };
+
+    case "DECLINE_INSURANCE":
+      return { ...state, insuranceBet: 0 };
+
+    case "RESOLVE_GAME": {
+      const playerValue = calculateHandValue(state.playerHands[0]?.cards || []).total;
+      const dealerValue = calculateHandValue(state.dealerHand).total;
+      
+      const playerCards = state.playerHands[0]?.cards || [];
+      const playerStatus = state.playerHands[0]?.status || "loss";
+      
+      if (playerStatus === "blackjack") {
+        return {
+          ...state,
+          playerHands: state.playerHands.map((h, i) => 
+            i === 0 ? { ...h, status: "blackjack" } : h
+          ),
+          gameState: "gameOver",
+          message: "You win with blackjack!",
+        };
+      }
+      
+      if (playerStatus === "bust") {
+        return {
+          ...state,
+          playerHands: state.playerHands.map((h, i) => 
+            i === 0 ? { ...h, status: "bust" } : h
+          ),
+          gameState: "gameOver",
+          message: "Bust! You lose.",
+        };
+      }
+      
+      if (dealerValue > 21) {
+        return {
+          ...state,
+          playerHands: state.playerHands.map((h, i) => 
+            i === 0 ? { ...h, status: "win" } : h
+          ),
+          gameState: "gameOver",
+          message: "Dealer bust! You win!",
+        };
+      }
+      
+      const hands = [...state.playerHands];
+      if (playerValue > dealerValue) {
+        hands[0]!.status = "win";
+        return {
+          ...state,
           playerHands: hands,
-          playerReady: true,
-          gameState: pVal > 21 ? "gameOver" : "dealerDrawing",
-          dealerHand: revealedDealerHand,
-          currentBet: pVal > 21 ? 0 : state.currentBet,
-          message: pVal > 21 ? "Bust!" : "",
+          gameState: "gameOver",
+          balance: state.balance + (state.currentBet * 2),
+          message: "You win!",
+        };
+      } else if (playerValue < dealerValue) {
+        hands[0]!.status = "loss";
+        return {
+          ...state,
+          playerHands: hands,
+          gameState: "gameOver",
+          message: "Dealer wins.",
         };
       } else {
+        hands[0]!.status = "push";
         return {
           ...state,
-          balance: newBalance,
-          deck: newDeck,
           playerHands: hands,
-          currentHandIndex: state.currentHandIndex + 1,
-        };
-      }
-    }
-
-    case "SPLIT": {
-      const hands = [...state.playerHands];
-      const currentHand = hands[state.currentHandIndex];
-      
-      if (currentHand.cards.length !== 2 || currentHand.cards[0].rank !== currentHand.cards[1].rank || state.balance < currentHand.bet) return state;
-
-      const newDeck = [...state.deck];
-      const card1 = newDeck.pop()!;
-      const card2 = newDeck.pop()!;
-
-      const newHand1: Hand = {
-        id: `hand-${Math.random()}`,
-        cards: [currentHand.cards[0], card1],
-        bet: currentHand.bet,
-        isFinished: false,
-      };
-
-      const newHand2: Hand = {
-        id: `hand-${Math.random()}`,
-        cards: [currentHand.cards[1], card2],
-        bet: currentHand.bet,
-        isFinished: false,
-      };
-
-      hands.splice(state.currentHandIndex, 1, newHand1, newHand2);
-
-      return {
-        ...state,
-        balance: state.balance - currentHand.bet,
-        deck: newDeck,
-        playerHands: hands,
-      };
-    }
-
-    case "INSURANCE": {
-      const insBet = state.currentBet / 2;
-      if (state.balance < insBet) return state;
-
-      let dealerVal = calculateHandValue([{...state.dealerHand[0], isHidden: false}, {...state.dealerHand[1], isHidden: false}]).total;
-      
-      if (dealerVal === 21) {
-        // Dealer has blackjack, player wins insurance, loses bet (unless player has blackjack, but we checked that on deal)
-        return {
-          ...state,
-          balance: state.balance - insBet + (insBet * 3), // returned ins bet + 2:1 payout
-          insuranceBet: insBet,
           gameState: "gameOver",
-          dealerHand: state.dealerHand.map(c => ({...c, isHidden: false})),
-          currentBet: 0,
-          message: "Dealer Blackjack! Insurance pays.",
+          balance: state.balance + state.currentBet,
+          message: "Push!",
         };
       }
-
-      return {
-        ...state,
-        balance: state.balance - insBet,
-        insuranceBet: insBet,
-        message: "",
-      };
-    }
-
-    case "DECLINE_INSURANCE": {
-       let dealerVal = calculateHandValue([{...state.dealerHand[0], isHidden: false}, {...state.dealerHand[1], isHidden: false}]).total;
-      
-       if (dealerVal === 21) {
-        return {
-          ...state,
-          gameState: "gameOver",
-          dealerHand: state.dealerHand.map(c => ({...c, isHidden: false})),
-          currentBet: 0,
-          message: "Dealer Blackjack!",
-        };
-       }
-       return {
-         ...state,
-         message: "",
-       };
-    }
-
-    case "DEALER_RESOLVE": {
-      let dealerHand = state.dealerHand.map(c => ({...c, isHidden: false}));
-      let newDeck = [...state.deck];
-      
-      // Only play if player hasn't busted all hands
-      const allBust = state.playerHands.every(h => calculateHandValue(h.cards).total > 21);
-      
-      if (!allBust) {
-        let dVal = calculateHandValue(dealerHand).total;
-        let dSoft = calculateHandValue(dealerHand).soft;
-        
-        while (dVal < 17 || (dVal === 17 && dSoft)) {
-          dealerHand.push(newDeck.pop()!);
-          const calc = calculateHandValue(dealerHand);
-          dVal = calc.total;
-          dSoft = calc.soft;
-        }
-      }
-
-      const finalDealerVal = calculateHandValue(dealerHand).total;
-      let newBalance = state.balance;
-      const finalHands = [...state.playerHands];
-
-      for (const hand of finalHands) {
-        const pVal = calculateHandValue(hand.cards).total;
-        if (pVal > 21) {
-          hand.status = "bust";
-        } else if (finalDealerVal > 21 || pVal > finalDealerVal) {
-          hand.status = "win";
-          newBalance += hand.bet * 2;
-        } else if (pVal === finalDealerVal) {
-          hand.status = "push";
-          newBalance += hand.bet;
-        } else {
-          hand.status = "loss";
-        }
-      }
-
-      let msg = "Round Over";
-      if (finalHands.length === 1) {
-        if (finalHands[0].status === "win") msg = "You Win!";
-        else if (finalHands[0].status === "loss") msg = "You Lose";
-        else if (finalHands[0].status === "push") msg = "Push";
-        else if (finalHands[0].status === "bust") msg = "Bust!";
-      }
-
-      return {
-        ...state,
-        deck: newDeck,
-        dealerHand,
-        playerHands: finalHands,
-        balance: newBalance,
-        gameState: "gameOver",
-        currentBet: 0,
-        message: msg,
-      };
-    }
-
-    case "DEALER_DRAW_NEXT": {
-      const allBust = state.playerHands.every(h => calculateHandValue(h.cards).total > 21);
-      if (allBust) {
-        return { ...state, dealerReady: true, gameState: "dealerResolving" };
-      }
-
-      let dealerHand = [...state.dealerHand];
-      let newDeck = [...state.deck];
-      dealerHand.push(newDeck.pop()!);
-
-      const dVal = calculateHandValue(dealerHand).total;
-      const dSoft = calculateHandValue(dealerHand).soft;
-
-      // Check if dealer needs to draw more
-      if (dVal < 17 || (dVal === 17 && dSoft)) {
-        return {
-          ...state,
-          deck: newDeck,
-          dealerHand,
-          gameState: "dealerDrawing",
-        };
-      }
-
-      // Dealer is done drawing — mark ready and resolve
-      return {
-        ...state,
-        deck: newDeck,
-        dealerHand,
-        dealerReady: true,
-        gameState: "dealerResolving",
-      };
-    }
-
-    case "START_DEALER_DRAWING": {
-      // Just reveal dealer's hole card, don't change gameState yet
-      // Player still has time to click Hit/Stand in "playing" state
-      const revealedDealerHand = state.dealerHand.map(c => ({ ...c, isHidden: false }));
-      return {
-        ...state,
-        dealerHand: revealedDealerHand,
-      };
     }
 
     default:
@@ -569,88 +514,64 @@ if (state.currentHandIndex === hands.length - 1) {
   }
 }
 
+const initialGameState: GameContext = {
+  deck: createDeck(6),
+  dealerHand: [],
+  playerHands: [],
+  currentHandIndex: 0,
+  balance: 1000,
+  currentBet: 0,
+  gameState: "betting",
+  insuranceBet: 0,
+  message: "",
+  dealingPhase: "done",
+  currentTurn: "player",
+  playerSkipCount: 0,
+  dealerSkipCount: 0,
+  playerReady: false,
+  dealerReady: false,
+  isBusted: false,
+};
+
 export function useBlackjack() {
-  const [state, dispatch] = useReducer(gameReducer, null, (): GameContext => {
-    const savedBalance = localStorage.getItem("blackjack_balance");
-    const initialBalance = savedBalance ? parseInt(savedBalance) : 1000;
-    return {
-      deck: createDeck(6),
-      dealerHand: [],
-      playerHands: [],
-      currentHandIndex: 0,
-      balance: initialBalance,
-      currentBet: 0,
-      gameState: "betting",
-      insuranceBet: 0,
-      message: "",
-      dealingPhase: "done",
-      playerReady: false,
-      dealerReady: false,
-    };
-  });
+  const [state, dispatch] = useReducer(gameReducer, initialGameState);
 
-  // Shuffle on mount (when entering game route)
-  useEffect(() => {
-    dispatch({ type: "SHUFFLE" });
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("blackjack_balance", state.balance.toString());
-  }, [state.balance]);
-
-  // Drive progressive dealing
+  // Auto-deal next card during dealing phase
   useEffect(() => {
     if (state.gameState === "dealing" && state.dealingPhase !== "done") {
-      const delay = 380;
       const timer = setTimeout(() => {
         dispatch({ type: "DEAL_NEXT_CARD" });
-      }, delay);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [state.gameState, state.dealingPhase]);
 
-  // Drive dealer drawing one card at a time with longer delay for visibility
+  // Auto-dealer actions during dealer turn
   useEffect(() => {
-    if (state.gameState === "dealerDrawing") {
-      const delay = 1200 + Math.random() * 600; // 1.2-1.8 seconds between cards
+    if (state.gameState === "dealerTurn" && !state.dealerReady) {
+      const delay = 1000 + Math.random() * 2000; // 1-3 seconds
       const timer = setTimeout(() => {
-        dispatch({ type: "DEALER_DRAW_NEXT" });
+        const dealerValue = calculateHandValue(state.dealerHand).total;
+        // Simple dealer AI: draw if under 17, skip if 17 or more
+        if (dealerValue < 17) {
+          dispatch({ type: "AUTO_DEALER_DRAW" });
+        } else {
+          dispatch({ type: "AUTO_DEALER_SKIP" });
+        }
       }, delay);
       return () => clearTimeout(timer);
     }
-  }, [state.gameState, state.dealerHand.length]);
+  }, [state.gameState, state.dealerReady, state.dealerHand]);
 
-  // Resolve after dealer finishes
+  // Resolve game when both are ready
   useEffect(() => {
-    if (state.gameState === "dealerResolving") {
+    if (state.playerReady && state.dealerReady && state.gameState !== "gameOver") {
       const timer = setTimeout(() => {
-        dispatch({ type: "DEALER_RESOLVE" });
-      }, 350);
-      return () => clearTimeout(timer);
-    }
-  }, [state.gameState]);
-
-  // Auto-trigger dealer drawing to start when dealing phase completes
-  useEffect(() => {
-    if (state.gameState === "playing" && state.dealingPhase === "done" && state.dealerHand.length === 2 && !state.playerReady) {
-      const delay = 1200; // Small delay after dealing completes, but before player must act
-      const timer = setTimeout(() => {
-        // Reveal dealer's hole card and transition to drawing state
-        dispatch({ type: "START_DEALER_DRAWING" });
-      }, delay);
-      return () => clearTimeout(timer);
-    }
-  }, [state.gameState, state.dealingPhase, state.dealerHand.length, state.playerReady]);
-
-  // Resolve game when both player and dealer are ready
-  useEffect(() => {
-    if (state.gameState === "dealerDrawing" && state.playerReady && state.dealerReady) {
-      const timer = setTimeout(() => {
-        dispatch({ type: "DEALER_RESOLVE" });
+        dispatch({ type: "RESOLVE_GAME" });
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [state.gameState, state.playerReady, state.dealerReady]);
+  }, [state.playerReady, state.dealerReady, state.gameState]);
 
   return {
     state,

@@ -121,9 +121,9 @@ function GameTableInner() {
   }, [musicMuted]);
 
   const isBroke = balance <= 0 && gameState === "gameOver";
-  const showResult =
+  const isDealingComplete =
     gameState === "gameOver" && !!message && tablePhase === "idle";
-  const isDealerDrawing = gameState === "dealerDrawing" || gameState === "dealerResolving";
+  const isDealerDrawing = gameState === "dealerTurn";
   const { playerReady, dealerReady } = state;
   const isAnimating = tablePhase !== "idle";
   const isCollecting = tablePhase === "collecting";
@@ -448,13 +448,13 @@ function GameTableInner() {
         loop
         style={{ display: "none" }}
         onLoadedMetadata={() => {
-          console.log("[v0] Jazz music loaded successfully");
+          console.log("[v0] Casino jazz music loaded");
         }}
         onError={(e) => {
           console.log("[v0] Audio error:", e);
         }}
       >
-        <source src="https://cdn.pixabay.com/download/audio/2022/03/10/audio_1c5d87e7d9.mp3" type="audio/mpeg" />
+        <source src="https://cdn.pixabay.com/download/audio/2023/07/20/audio_70bc44f17e.mp3" type="audio/mpeg" />
       </audio>
 
       {/* ── Player Zone ────────────────────────── */}
@@ -496,7 +496,7 @@ function GameTableInner() {
                     isActive={
                       i === currentHandIndex &&
                       !hand.isFinished &&
-                      gameState === "playing"
+                      gameState === "playerTurn"
                     }
                     isReady={playerReady}
                     isFinished={hand.isFinished}
