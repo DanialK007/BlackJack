@@ -619,18 +619,27 @@ export function useBlackjack() {
     }
   }, [state.gameState]);
 
-  // Auto-trigger dealer drawing when dealing is done
+  // Auto-trigger dealer drawing when dealing is done (without affecting player ready)
   useEffect(() => {
-    if (state.gameState === "playing" && state.dealingPhase === "done" && !state.playerReady) {
-      const delay = 600;
+    if (state.gameState === "playing" && state.dealingPhase === "done" && !state.dealerReady) {
+      const delay = 2500; // Give player time to decide on Hit/Stand
       const timer = setTimeout(() => {
-        // Reveal dealer's hole card and start drawing
-        const revealedDealerHand = state.dealerHand.map(c => ({ ...c, isHidden: false }));
-        dispatch({ type: "STAND" });
+        // Reveal dealer's hole card and start drawing (independent of player)
+        dispatch({ type: "DEALER_DRAW_NEXT" });
       }, delay);
       return () => clearTimeout(timer);
     }
-  }, [state.gameState, state.dealingPhase, state.playerReady]);
+  }, [state.gameState, state.dealingPhase, state.dealerReady]);
+
+  // Resolve game when both player and dealer are ready
+  useEffect(() => {
+    if (state.gameState === "dealerDrawing" && state.playerReady && state.dealerReady) {
+      const timer = setTimeout(() => {
+        dispatch({ type: "DEALER_RESOLVE" });
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [state.gameState, state.playerReady, state.dealerReady]);
 
   return {
     state,
