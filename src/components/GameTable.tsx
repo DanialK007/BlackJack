@@ -448,13 +448,13 @@ function GameTableInner() {
         loop
         style={{ display: "none" }}
         onLoadedMetadata={() => {
-          console.log("[v0] Music loaded successfully");
+          console.log("[v0] Jazz music loaded successfully");
         }}
         onError={(e) => {
           console.log("[v0] Audio error:", e);
         }}
       >
-        <source src="https://assets.mixkit.co/active_storage/sfx/2441/2441-preview.mp3" type="audio/mpeg" />
+        <source src="https://cdn.pixabay.com/download/audio/2022/03/10/audio_1c5d87e7d9.mp3" type="audio/mpeg" />
       </audio>
 
       {/* ── Player Zone ────────────────────────── */}

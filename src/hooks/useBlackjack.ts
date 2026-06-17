@@ -110,6 +110,7 @@ type Action =
   | { type: "NEW_ROUND" }
   | { type: "DEALER_RESOLVE" }
   | { type: "DEALER_DRAW_NEXT" }
+  | { type: "START_DEALER_DRAWING" }
   | { type: "SHUFFLE" };
 
 function gameReducer(state: GameContext, action: Action): GameContext {
@@ -553,6 +554,16 @@ if (state.currentHandIndex === hands.length - 1) {
       };
     }
 
+    case "START_DEALER_DRAWING": {
+      // Just reveal dealer's hole card, don't change gameState yet
+      // Player still has time to click Hit/Stand in "playing" state
+      const revealedDealerHand = state.dealerHand.map(c => ({ ...c, isHidden: false }));
+      return {
+        ...state,
+        dealerHand: revealedDealerHand,
+      };
+    }
+
     default:
       return state;
   }
@@ -598,10 +609,10 @@ export function useBlackjack() {
     }
   }, [state.gameState, state.dealingPhase]);
 
-  // Drive dealer drawing one card at a time
+  // Drive dealer drawing one card at a time with longer delay for visibility
   useEffect(() => {
     if (state.gameState === "dealerDrawing") {
-      const delay = 400 + Math.random() * 500;
+      const delay = 1200 + Math.random() * 600; // 1.2-1.8 seconds between cards
       const timer = setTimeout(() => {
         dispatch({ type: "DEALER_DRAW_NEXT" });
       }, delay);
@@ -619,24 +630,24 @@ export function useBlackjack() {
     }
   }, [state.gameState]);
 
-  // Auto-trigger dealer drawing when dealing is done (without affecting player ready)
+  // Auto-trigger dealer drawing to start when dealing phase completes
   useEffect(() => {
-    if (state.gameState === "playing" && state.dealingPhase === "done" && !state.dealerReady) {
-      const delay = 2500; // Give player time to decide on Hit/Stand
+    if (state.gameState === "playing" && state.dealingPhase === "done" && state.dealerHand.length === 2 && !state.playerReady) {
+      const delay = 1200; // Small delay after dealing completes, but before player must act
       const timer = setTimeout(() => {
-        // Reveal dealer's hole card and start drawing (independent of player)
-        dispatch({ type: "DEALER_DRAW_NEXT" });
+        // Reveal dealer's hole card and transition to drawing state
+        dispatch({ type: "START_DEALER_DRAWING" });
       }, delay);
       return () => clearTimeout(timer);
     }
-  }, [state.gameState, state.dealingPhase, state.dealerReady]);
+  }, [state.gameState, state.dealingPhase, state.dealerHand.length, state.playerReady]);
 
   // Resolve game when both player and dealer are ready
   useEffect(() => {
     if (state.gameState === "dealerDrawing" && state.playerReady && state.dealerReady) {
       const timer = setTimeout(() => {
         dispatch({ type: "DEALER_RESOLVE" });
-      }, 300);
+      }, 500);
       return () => clearTimeout(timer);
     }
   }, [state.gameState, state.playerReady, state.dealerReady]);
