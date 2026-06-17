@@ -93,10 +93,31 @@ function GameTableInner() {
     if (musicMuted) {
       audioRef.current.pause();
     } else {
-      audioRef.current.play().catch(() => {
-        // Browser may block autoplay
+      audioRef.current.volume = 0.3; // Set volume to 30%
+      audioRef.current.play().catch((error) => {
+        console.log("[v0] Music autoplay blocked by browser:", error.message);
       });
     }
+  }, [musicMuted]);
+
+  // Enable music on first user interaction
+  useEffect(() => {
+    const playMusic = () => {
+      if (audioRef.current && !musicMuted) {
+        audioRef.current.volume = 0.3;
+        audioRef.current.play().catch(() => {
+          // Silent catch
+        });
+      }
+    };
+
+    document.addEventListener("click", playMusic);
+    document.addEventListener("keydown", playMusic);
+
+    return () => {
+      document.removeEventListener("click", playMusic);
+      document.removeEventListener("keydown", playMusic);
+    };
   }, [musicMuted]);
 
   const isBroke = balance <= 0 && gameState === "gameOver";
@@ -424,11 +445,17 @@ function GameTableInner() {
       {/* ── Background Music ──────────────────── */}
       <audio
         ref={audioRef}
-        src="https://cdn.pixabay.com/download/audio/2024/02/29/audio_e65e5af2df.mp3"
         loop
-        autoPlay
         style={{ display: "none" }}
-      />
+        onLoadedMetadata={() => {
+          console.log("[v0] Music loaded successfully");
+        }}
+        onError={(e) => {
+          console.log("[v0] Audio error:", e);
+        }}
+      >
+        <source src="https://assets.mixkit.co/active_storage/sfx/2441/2441-preview.mp3" type="audio/mpeg" />
+      </audio>
 
       {/* ── Player Zone ────────────────────────── */}
       <FadeIn

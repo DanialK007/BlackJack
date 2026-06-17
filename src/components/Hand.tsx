@@ -93,6 +93,14 @@ export function Hand({
               ${bet}
             </span>
           )}
+          {isReady && !status && (
+            <span
+              className="text-xs font-semibold px-2 py-0.5 rounded-full"
+              style={{ background: "rgba(43,125,43,0.35)", color: "hsl(140,60%,75%)", border: "1px solid rgba(43,125,43,0.3)" }}
+            >
+              Ready
+            </span>
+          )}
         </div>
       )}
 
@@ -127,14 +135,6 @@ export function Hand({
             style={{ background: "rgba(184,134,11,0.35)", color: "hsl(43,74%,75%)", border: "1px solid rgba(184,134,11,0.3)" }}
           >
             Your Turn
-          </div>
-        )}
-        {(isReady && !status) && (
-          <div
-            className="rounded-md px-2 py-0.5 text-xs font-semibold"
-            style={{ background: "rgba(43,125,43,0.35)", color: "hsl(140,60%,75%)", border: "1px solid rgba(43,125,43,0.3)" }}
-          >
-            Ready
           </div>
         )}
       </div>

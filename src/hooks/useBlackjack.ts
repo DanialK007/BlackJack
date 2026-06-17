@@ -619,6 +619,19 @@ export function useBlackjack() {
     }
   }, [state.gameState]);
 
+  // Auto-trigger dealer drawing when dealing is done
+  useEffect(() => {
+    if (state.gameState === "playing" && state.dealingPhase === "done" && !state.playerReady) {
+      const delay = 600;
+      const timer = setTimeout(() => {
+        // Reveal dealer's hole card and start drawing
+        const revealedDealerHand = state.dealerHand.map(c => ({ ...c, isHidden: false }));
+        dispatch({ type: "STAND" });
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [state.gameState, state.dealingPhase, state.playerReady]);
+
   return {
     state,
     dispatch,
