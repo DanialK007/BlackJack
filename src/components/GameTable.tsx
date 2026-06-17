@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useBlackjack } from "@/hooks/useBlackjack";
 import { useIsMobile } from "@/hooks/useIsMobile";
@@ -85,6 +85,19 @@ function GameTableInner() {
 
   const [tablePhase, setTablePhase] = useState<TablePhase>("idle");
   const [showCards, setShowCards] = useState(true);
+  const [musicMuted, setMusicMuted] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (!audioRef.current) return;
+    if (musicMuted) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch(() => {
+        // Browser may block autoplay
+      });
+    }
+  }, [musicMuted]);
 
   const isBroke = balance <= 0 && gameState === "gameOver";
   const showResult =
@@ -210,7 +223,22 @@ function GameTableInner() {
             </span>
           </div>
         </div>
-        <div className="flex items-center justify-end">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            onClick={() => setMusicMuted(!musicMuted)}
+            className="rounded-lg px-3 py-2 flex items-center gap-2 text-sm font-medium transition-all hover:opacity-80"
+            style={{
+              background: "rgba(0,0,0,0.4)",
+              border: `1px solid ${musicMuted ? "rgba(198,40,40,0.3)" : "rgba(212,187,130,0.25)"}`,
+              color: musicMuted ? "hsl(0,72%,65%)" : "hsl(43,74%,65%)",
+              cursor: "pointer",
+            }}
+            title={musicMuted ? "Unmute music" : "Mute music"}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>
+              {musicMuted ? "🔇" : "🎵"}
+            </span>
+          </button>
           <MenuPanel onNewGame={handleRestart} />
         </div>
       </FadeIn>
@@ -392,6 +420,15 @@ function GameTableInner() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* ── Background Music ──────────────────── */}
+      <audio
+        ref={audioRef}
+        src="https://cdn.pixabay.com/download/audio/2024/02/29/audio_e65e5af2df.mp3"
+        loop
+        autoPlay
+        style={{ display: "none" }}
+      />
 
       {/* ── Player Zone ────────────────────────── */}
       <FadeIn

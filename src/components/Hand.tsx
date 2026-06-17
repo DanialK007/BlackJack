@@ -129,7 +129,7 @@ export function Hand({
             Your Turn
           </div>
         )}
-        {((isReady || isFinished) && !status) && (
+        {(isReady && !status) && (
           <div
             className="rounded-md px-2 py-0.5 text-xs font-semibold"
             style={{ background: "rgba(43,125,43,0.35)", color: "hsl(140,60%,75%)", border: "1px solid rgba(43,125,43,0.3)" }}
