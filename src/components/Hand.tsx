@@ -8,6 +8,8 @@ interface HandProps {
   status?: "win" | "loss" | "push" | "blackjack" | "bust";
   bet?: number;
   isActive?: boolean;
+  isReady?: boolean;
+  isFinished?: boolean;
   small?: boolean;
   isCollecting?: boolean;
   collectBaseIndex?: number;
@@ -62,6 +64,8 @@ export function Hand({
   status,
   bet,
   isActive,
+  isReady,
+  isFinished,
   small,
   isCollecting,
   collectBaseIndex = 0,
@@ -123,6 +127,14 @@ export function Hand({
             style={{ background: "rgba(184,134,11,0.35)", color: "hsl(43,74%,75%)", border: "1px solid rgba(184,134,11,0.3)" }}
           >
             Your Turn
+          </div>
+        )}
+        {((isReady || isFinished) && !status) && (
+          <div
+            className="rounded-md px-2 py-0.5 text-xs font-semibold"
+            style={{ background: "rgba(43,125,43,0.35)", color: "hsl(140,60%,75%)", border: "1px solid rgba(43,125,43,0.3)" }}
+          >
+            Ready
           </div>
         )}
       </div>

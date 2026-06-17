@@ -19,7 +19,8 @@ export interface Hand {
   status?: "win" | "loss" | "push" | "blackjack" | "bust";
 }
 
-export type GameState = "betting" | "playing" | "dealerTurn" | "gameOver";
+export type GameState = "betting" | "dealing" | "playing" | "dealerDrawing" | "dealerResolving" | "gameOver";
+export type DealingPhase = "p1" | "p2" | "d1" | "d2" | "done";
 
 export interface GameContext {
   deck: Card[];
@@ -31,6 +32,11 @@ export interface GameContext {
   gameState: GameState;
   insuranceBet: number;
   message: string;
+  // For progressive dealing animation
+  dealingPhase: DealingPhase;
+  // Ready badges
+  playerReady: boolean;
+  dealerReady: boolean;
 }
 
 const SUITS: Suit[] = ["Spades", "Hearts", "Diamonds", "Clubs"];
@@ -93,6 +99,7 @@ type Action =
   | { type: "PLACE_BET"; amount: number }
   | { type: "CLEAR_BET" }
   | { type: "DEAL" }
+  | { type: "DEAL_NEXT_CARD" }
   | { type: "HIT" }
   | { type: "STAND" }
   | { type: "DOUBLE_DOWN" }
@@ -101,7 +108,8 @@ type Action =
   | { type: "DECLINE_INSURANCE" }
   | { type: "RESTART" }
   | { type: "NEW_ROUND" }
-  | { type: "DEALER_PLAY" }
+  | { type: "DEALER_RESOLVE" }
+  | { type: "DEALER_DRAW_NEXT" }
   | { type: "SHUFFLE" };
 
 function gameReducer(state: GameContext, action: Action): GameContext {
@@ -110,6 +118,7 @@ function gameReducer(state: GameContext, action: Action): GameContext {
       return {
         ...state,
         deck: shuffle(createDeck(6)),
+        dealingPhase: "done",
       };
 
     case "RESTART":
@@ -123,7 +132,10 @@ function gameReducer(state: GameContext, action: Action): GameContext {
         dealerHand: [],
         insuranceBet: 0,
         currentHandIndex: 0,
-        deck: createDeck(6)
+        deck: createDeck(6),
+        dealingPhase: "done",
+        playerReady: false,
+        dealerReady: false,
       };
 
     case "NEW_ROUND":
@@ -137,6 +149,9 @@ function gameReducer(state: GameContext, action: Action): GameContext {
         insuranceBet: 0,
         currentHandIndex: 0,
         deck: state.deck.length < 78 ? createDeck(6) : state.deck,
+        dealingPhase: "done",
+        playerReady: false,
+        dealerReady: false,
       };
 
     case "PLACE_BET":
@@ -165,56 +180,99 @@ function gameReducer(state: GameContext, action: Action): GameContext {
       }
       newDeck = shuffle(newDeck);
 
+      // Deal player card 1 — the rest is progressive via DEAL_NEXT_CARD
       const playerCard1 = newDeck.pop()!;
-      const dealerCard1 = newDeck.pop()!;
-      const playerCard2 = newDeck.pop()!;
-      const dealerCard2 = { ...newDeck.pop()!, isHidden: true };
-
-      const playerHand: Hand = {
-        id: "hand-1",
-        cards: [playerCard1, playerCard2],
-        bet: state.currentBet,
-        isFinished: false,
-      };
-
-      const pVal = calculateHandValue(playerHand.cards).total;
-      
-      // Check for dealer Ace
-      if (dealerCard1.rank === "A" && state.balance >= state.currentBet / 2) {
-        return {
-          ...state,
-          deck: newDeck,
-          playerHands: [playerHand],
-          dealerHand: [dealerCard1, dealerCard2],
-          gameState: "playing", // Prompt for insurance
-          message: "Insurance?",
-        };
-      }
-
-      if (pVal === 21) {
-        // Player blackjack
-        playerHand.isFinished = true;
-        playerHand.status = "blackjack";
-        return {
-          ...state,
-          deck: newDeck,
-          playerHands: [playerHand],
-          dealerHand: [dealerCard1, { ...dealerCard2, isHidden: false }],
-          gameState: "gameOver",
-          balance: state.balance + state.currentBet * 2.5,
-          currentBet: 0,
-          message: "Blackjack! You win!",
-        };
-      }
 
       return {
         ...state,
         deck: newDeck,
-        playerHands: [playerHand],
-        dealerHand: [dealerCard1, dealerCard2],
-        gameState: "playing",
+        playerHands: [{
+          id: "hand-1",
+          cards: [playerCard1],
+          bet: state.currentBet,
+          isFinished: false,
+        }],
+        dealerHand: [],
+        gameState: "dealing",
+        dealingPhase: "p1",
+        playerReady: false,
+        dealerReady: false,
         message: "",
       };
+    }
+
+    case "DEAL_NEXT_CARD": {
+      let newDeck = [...state.deck];
+      const { dealingPhase, playerHands, dealerHand } = state;
+
+      // p1 → deal player card 2 + dealer card 1
+      if (dealingPhase === "p1") {
+        const playerCard2 = newDeck.pop()!;
+        const dealerCard1 = newDeck.pop()!;
+        const newPlayerHands = playerHands.map(h => ({
+          ...h,
+          cards: [...h.cards, playerCard2],
+        }));
+        return {
+          ...state,
+          deck: newDeck,
+          playerHands: newPlayerHands,
+          dealerHand: [dealerCard1],
+          gameState: "dealing",
+          dealingPhase: "p2",
+        };
+      }
+
+      // p2 → deal dealer's hidden card
+      if (dealingPhase === "p2") {
+        const dealerCard2 = { ...newDeck.pop()!, isHidden: true };
+        const newDealerHand = [...dealerHand, dealerCard2];
+        const pVal = calculateHandValue(playerHands[0]?.cards ?? []).total;
+        const dealerCard1 = dealerHand[0];
+
+        // Check for dealer Ace (insurance)
+        if (dealerCard1?.rank === "A" && state.balance >= state.currentBet / 2) {
+          return {
+            ...state,
+            deck: newDeck,
+            dealerHand: newDealerHand,
+            gameState: "playing",
+            dealingPhase: "done",
+            message: "Insurance?",
+          };
+        }
+
+        // Check for player blackjack (instant)
+        if (pVal === 21) {
+          const newPlayerHands = playerHands.map(h => ({
+            ...h,
+            isFinished: true,
+            status: "blackjack" as const,
+          }));
+          return {
+            ...state,
+            deck: newDeck,
+            playerHands: newPlayerHands,
+            dealerHand: newDealerHand.map(c => ({ ...c, isHidden: false })),
+            gameState: "gameOver",
+            balance: state.balance + state.currentBet * 2.5,
+            currentBet: 0,
+            message: "Blackjack! You win!",
+            dealingPhase: "done",
+          };
+        }
+
+        return {
+          ...state,
+          deck: newDeck,
+          dealerHand: newDealerHand,
+          gameState: "playing",
+          dealingPhase: "done",
+          message: "",
+        };
+      }
+
+      return state;
     }
 
     case "HIT": {
@@ -263,10 +321,14 @@ function gameReducer(state: GameContext, action: Action): GameContext {
       hands[state.currentHandIndex].isFinished = true;
 
       if (state.currentHandIndex === hands.length - 1) {
+        // Player is done — mark ready, reveal dealer's hole card, start drawing
+        const revealedDealerHand = state.dealerHand.map(c => ({ ...c, isHidden: false }));
         return {
           ...state,
           playerHands: hands,
-          gameState: "dealerTurn",
+          playerReady: true,
+          dealerHand: revealedDealerHand,
+          gameState: "dealerDrawing",
         };
       } else {
         return {
@@ -297,14 +359,16 @@ function gameReducer(state: GameContext, action: Action): GameContext {
         currentHand.status = "bust";
       }
 
-      if (state.currentHandIndex === hands.length - 1) {
+if (state.currentHandIndex === hands.length - 1) {
+        const revealedDealerHand = state.dealerHand.map(c => ({...c, isHidden: false}));
         return {
           ...state,
           balance: newBalance,
           deck: newDeck,
           playerHands: hands,
-          gameState: pVal > 21 ? "gameOver" : "dealerTurn",
-          dealerHand: pVal > 21 ? state.dealerHand.map(c => ({...c, isHidden: false})) : state.dealerHand,
+          playerReady: true,
+          gameState: pVal > 21 ? "gameOver" : "dealerDrawing",
+          dealerHand: revealedDealerHand,
           currentBet: pVal > 21 ? 0 : state.currentBet,
           message: pVal > 21 ? "Bust!" : "",
         };
@@ -398,7 +462,7 @@ function gameReducer(state: GameContext, action: Action): GameContext {
        };
     }
 
-    case "DEALER_PLAY": {
+    case "DEALER_RESOLVE": {
       let dealerHand = state.dealerHand.map(c => ({...c, isHidden: false}));
       let newDeck = [...state.deck];
       
@@ -456,6 +520,39 @@ function gameReducer(state: GameContext, action: Action): GameContext {
       };
     }
 
+    case "DEALER_DRAW_NEXT": {
+      const allBust = state.playerHands.every(h => calculateHandValue(h.cards).total > 21);
+      if (allBust) {
+        return { ...state, dealerReady: true, gameState: "dealerResolving" };
+      }
+
+      let dealerHand = [...state.dealerHand];
+      let newDeck = [...state.deck];
+      dealerHand.push(newDeck.pop()!);
+
+      const dVal = calculateHandValue(dealerHand).total;
+      const dSoft = calculateHandValue(dealerHand).soft;
+
+      // Check if dealer needs to draw more
+      if (dVal < 17 || (dVal === 17 && dSoft)) {
+        return {
+          ...state,
+          deck: newDeck,
+          dealerHand,
+          gameState: "dealerDrawing",
+        };
+      }
+
+      // Dealer is done drawing — mark ready and resolve
+      return {
+        ...state,
+        deck: newDeck,
+        dealerHand,
+        dealerReady: true,
+        gameState: "dealerResolving",
+      };
+    }
+
     default:
       return state;
   }
@@ -475,6 +572,9 @@ export function useBlackjack() {
       gameState: "betting",
       insuranceBet: 0,
       message: "",
+      dealingPhase: "done",
+      playerReady: false,
+      dealerReady: false,
     };
   });
 
@@ -487,11 +587,34 @@ export function useBlackjack() {
     localStorage.setItem("blackjack_balance", state.balance.toString());
   }, [state.balance]);
 
+  // Drive progressive dealing
   useEffect(() => {
-    if (state.gameState === "dealerTurn") {
+    if (state.gameState === "dealing" && state.dealingPhase !== "done") {
+      const delay = 380;
       const timer = setTimeout(() => {
-        dispatch({ type: "DEALER_PLAY" });
-      }, 500);
+        dispatch({ type: "DEAL_NEXT_CARD" });
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [state.gameState, state.dealingPhase]);
+
+  // Drive dealer drawing one card at a time
+  useEffect(() => {
+    if (state.gameState === "dealerDrawing") {
+      const delay = 400 + Math.random() * 500;
+      const timer = setTimeout(() => {
+        dispatch({ type: "DEALER_DRAW_NEXT" });
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [state.gameState, state.dealerHand.length]);
+
+  // Resolve after dealer finishes
+  useEffect(() => {
+    if (state.gameState === "dealerResolving") {
+      const timer = setTimeout(() => {
+        dispatch({ type: "DEALER_RESOLVE" });
+      }, 350);
       return () => clearTimeout(timer);
     }
   }, [state.gameState]);

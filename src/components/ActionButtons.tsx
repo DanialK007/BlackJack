@@ -88,6 +88,14 @@ export function ActionButtons({ game }: ActionButtonsProps) {
     );
   }
 
+  if (gameState === "dealerDrawing" || gameState === "dealerResolving") {
+    return (
+      <div style={{ color: "rgba(212,187,130,0.45)", fontSize: isMobile ? "0.75rem" : "0.8rem", letterSpacing: "0.06em" }}>
+        Waiting for dealer...
+      </div>
+    );
+  }
+
   if (isInsurancePrompt) {
     return (
       <div className="flex flex-col items-center gap-2">

@@ -89,6 +89,8 @@ function GameTableInner() {
   const isBroke = balance <= 0 && gameState === "gameOver";
   const showResult =
     gameState === "gameOver" && !!message && tablePhase === "idle";
+  const isDealerDrawing = gameState === "dealerDrawing" || gameState === "dealerResolving";
+  const { playerReady, dealerReady } = state;
   const isAnimating = tablePhase !== "idle";
   const isCollecting = tablePhase === "collecting";
   const tableCardCount =
@@ -237,6 +239,7 @@ function GameTableInner() {
                 cards={dealerHand}
                 label="Dealer"
                 isDealer
+                isReady={dealerReady}
                 small={isMobile}
                 isCollecting={isCollecting}
               />
@@ -255,6 +258,33 @@ function GameTableInner() {
             }}
           >
             Place your bet to begin
+          </div>
+        )}
+
+        {isDealerDrawing && (
+          <div
+            style={{
+              marginTop: isMobile ? 4 : 8,
+              fontSize: isMobile ? "0.65rem" : "0.8rem",
+              textTransform: "uppercase",
+              letterSpacing: "0.12em",
+              color: "rgba(212,187,130,0.55)",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                background: "hsl(43,74%,65%)",
+                display: "inline-block",
+                animation: "pulse 1s ease-in-out infinite",
+              }}
+            />
+            Dealer is drawing...
           </div>
         )}
       </FadeIn>
@@ -404,6 +434,8 @@ function GameTableInner() {
                       !hand.isFinished &&
                       gameState === "playing"
                     }
+                    isReady={playerReady}
+                    isFinished={hand.isFinished}
                     small={isMobile}
                     isCollecting={isCollecting}
                     collectBaseIndex={dealerHand.length + previousPlayerCards}
