@@ -1,10 +1,8 @@
 import { Link } from "wouter";
-import { ChevronRight, Lock, Spade } from "lucide-react";
+import { ChevronRight, Spade, Coins, Dice6 } from "lucide-react";
 import { AuthPanel } from "@/components/AuthPanel";
 import { FadeIn } from "@/components/FadeIn";
 import { useAuth } from "@/contexts/AuthContext";
-
-const UPCOMING_GAMES = ["Poker", "Roulette", "Baccarat"];
 
 export default function Lobby() {
   const { user } = useAuth();
@@ -106,23 +104,59 @@ export default function Lobby() {
             <FadeIn duration={0.4} delay={0.2} popup>
               <div>
                 <p className="mb-3 text-xs uppercase tracking-widest text-amber-100/45">
-                  Coming later
+                  Other Games
                 </p>
                 <div className="grid gap-3 sm:grid-cols-3">
-                  {UPCOMING_GAMES.map((game) => (
-                    <div
-                      key={game}
-                      className="flex min-h-28 flex-col justify-between rounded-lg border border-white/10 bg-black/20 p-4 opacity-75"
-                    >
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-serif text-xl font-bold text-amber-100">
-                          {game}
-                        </h3>
-                        <Lock size={16} className="text-amber-100/35" />
+                  <Link href="/game?type=roulette">
+                    <button className="group min-h-28 w-full overflow-hidden rounded-lg border border-amber-400/25 bg-black/25 p-4 text-left transition hover:-translate-y-0.5 hover:border-amber-300/55">
+                      <div className="flex h-full flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-serif text-xl font-bold text-amber-100">
+                            Roulette
+                          </h3>
+                          <Dice6 size={18} className="text-amber-300/70" />
+                        </div>
+                        <div className="inline-flex items-center gap-1 text-xs text-amber-300">
+                          Play
+                          <ChevronRight size={14} />
+                        </div>
                       </div>
-                      <p className="text-sm text-amber-50/45">Locked</p>
-                    </div>
-                  ))}
+                    </button>
+                  </Link>
+
+                  <Link href="/game?type=baccarat">
+                    <button className="group min-h-28 w-full overflow-hidden rounded-lg border border-amber-400/25 bg-black/25 p-4 text-left transition hover:-translate-y-0.5 hover:border-amber-300/55">
+                      <div className="flex h-full flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-serif text-xl font-bold text-amber-100">
+                            Baccarat
+                          </h3>
+                          <Coins size={18} className="text-amber-300/70" />
+                        </div>
+                        <div className="inline-flex items-center gap-1 text-xs text-amber-300">
+                          Play
+                          <ChevronRight size={14} />
+                        </div>
+                      </div>
+                    </button>
+                  </Link>
+
+                  <Link href="/game?type=poker">
+                    <button className="group min-h-28 w-full overflow-hidden rounded-lg border border-amber-400/25 bg-black/25 p-4 text-left transition hover:-translate-y-0.5 hover:border-amber-300/55">
+                      <div className="flex h-full flex-col justify-between">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-serif text-xl font-bold text-amber-100">
+                            Poker
+                          </h3>
+                          <Spade size={18} className="text-amber-300/70" />
+                        </div>
+                        <div className="inline-flex items-center gap-1 text-xs text-amber-300">
+                          Play
+                          <ChevronRight size={14} />
+                        </div>
+                      </div>
+                    </button>
+                  </Link>
                 </div>
               </div>
             </FadeIn>
